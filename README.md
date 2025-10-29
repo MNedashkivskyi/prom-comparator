@@ -77,7 +77,13 @@ cd prom-comparator
 
 2. Start all services:
 ```bash
-docker-compose up -d
+# Simple setup (no Docker login required) - RECOMMENDED
+./start.sh
+# or
+make start
+
+# Alternative: Custom metrics generator (requires Docker Hub login)
+make start-custom
 ```
 
 3. Wait for all services to start (30-60 seconds):
@@ -93,6 +99,8 @@ open http://localhost:3000
 - Password: `admin`
 
 5. Open the "Prometheus vs VictoriaMetrics - Recording Rules Performance" dashboard
+
+**Note:** The default setup uses a simplified metrics generator that doesn't require building custom Docker images. See [QUICKSTART.md](QUICKSTART.md) if you encounter Docker authentication issues.
 
 ### Viewing Individual Components
 

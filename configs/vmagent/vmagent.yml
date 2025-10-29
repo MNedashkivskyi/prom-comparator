@@ -19,12 +19,13 @@ scrape_configs:
         labels:
           source: 'victoriametrics-stack'
 
-  # Scrape custom metrics generator (same as Prometheus)
-  - job_name: 'metrics-generator'
+  # Scrape pushgateway (receives pushed metrics, same as Prometheus)
+  - job_name: 'pushgateway'
     static_configs:
-      - targets: ['metrics-generator:8080']
+      - targets: ['pushgateway:9091']
         labels:
           source: 'victoriametrics-stack'
+    honor_labels: true
 
   # Scrape VictoriaMetrics metrics
   - job_name: 'victoriametrics'

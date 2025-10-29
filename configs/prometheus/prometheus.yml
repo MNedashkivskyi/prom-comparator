@@ -33,12 +33,13 @@ scrape_configs:
         labels:
           source: 'prometheus-stack'
 
-  # Scrape custom metrics generator
-  - job_name: 'metrics-generator'
+  # Scrape pushgateway (receives pushed metrics)
+  - job_name: 'pushgateway'
     static_configs:
-      - targets: ['metrics-generator:8080']
+      - targets: ['pushgateway:9091']
         labels:
           source: 'prometheus-stack'
+    honor_labels: true
 
   # Scrape VictoriaMetrics (Prometheus sink) metrics
   - job_name: 'victoriametrics-prom-sink'

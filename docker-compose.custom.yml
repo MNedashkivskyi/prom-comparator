@@ -115,50 +115,16 @@ services:
       - monitoring
     restart: unless-stopped
 
-  # Using Prometheus pushgateway as a simple metrics source instead of custom generator
-  # This avoids needing to build custom images
-  pushgateway:
-    image: prom/pushgateway:v1.6.2
-    container_name: pushgateway
+  # Custom metrics generator for testing
+  metrics-generator:
+    build:
+      context: ./metrics-generator
+      dockerfile: Dockerfile
+    container_name: metrics-generator
     ports:
-      - "9091:9091"
+      - "8080:8080"
     networks:
       - monitoring
-    restart: unless-stopped
-
-  # Simple script runner that generates metrics by pushing to pushgateway
-  metrics-pusher:
-    image: curlimages/curl:8.5.0
-    container_name: metrics-pusher
-    networks:
-      - monitoring
-    depends_on:
-      - pushgateway
-    command: >
-      sh -c "
-      while true; do
-        # Generate random metric values
-        cat <<EOF | curl --data-binary @- http://pushgateway:9091/metrics/job/metrics-generator/instance/generator-1
-      # TYPE http_requests_total counter
-      # HELP http_requests_total Total HTTP requests
-      http_requests_total{method=\"GET\",endpoint=\"/api/users\",status=\"200\"} $$((RANDOM % 1000))
-      http_requests_total{method=\"GET\",endpoint=\"/api/posts\",status=\"200\"} $$((RANDOM % 800))
-      http_requests_total{method=\"POST\",endpoint=\"/api/users\",status=\"201\"} $$((RANDOM % 200))
-      http_requests_total{method=\"GET\",endpoint=\"/api/search\",status=\"200\"} $$((RANDOM % 500))
-      http_requests_total{method=\"GET\",endpoint=\"/api/users\",status=\"500\"} $$((RANDOM % 10))
-      # TYPE active_connections gauge
-      # HELP active_connections Number of active connections
-      active_connections{service=\"api\"} $$((RANDOM % 1000))
-      active_connections{service=\"database\"} $$((RANDOM % 500))
-      active_connections{service=\"cache\"} $$((RANDOM % 300))
-      # TYPE queue_size gauge
-      # HELP queue_size Current queue size
-      queue_size{queue_name=\"job-queue\"} $$((RANDOM % 500))
-      queue_size{queue_name=\"event-queue\"} $$((RANDOM % 200))
-      EOF
-        sleep 5
-      done
-      "
     restart: unless-stopped
 
   # =============================================================================

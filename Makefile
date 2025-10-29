@@ -1,10 +1,11 @@
-.PHONY: help start stop restart logs clean status reload-prometheus reload-vmalert
+.PHONY: help start start-custom stop restart logs clean status reload-prometheus reload-vmalert
 
 help:
 	@echo "Prometheus vs VictoriaMetrics Comparison"
 	@echo ""
 	@echo "Available commands:"
-	@echo "  make start              - Start all services"
+	@echo "  make start              - Start all services (simple setup, no Docker login needed)"
+	@echo "  make start-custom       - Start with custom metrics generator (requires Docker login)"
 	@echo "  make stop               - Stop all services"
 	@echo "  make restart            - Restart all services"
 	@echo "  make logs               - Show logs from all services"
@@ -19,8 +20,15 @@ help:
 	@echo "  make open-prometheus    - Open Prometheus in browser"
 
 start:
-	@echo "Starting all services..."
+	@echo "Starting all services (simple setup)..."
 	docker-compose up -d
+	@echo "Services started! Access Grafana at http://localhost:3000"
+	@echo "Note: Using simplified metrics generator (no custom build required)"
+
+start-custom:
+	@echo "Starting all services (custom metrics generator)..."
+	@echo "Note: This requires Docker Hub authentication"
+	docker-compose -f docker-compose.custom.yml up -d
 	@echo "Services started! Access Grafana at http://localhost:3000"
 
 stop:
