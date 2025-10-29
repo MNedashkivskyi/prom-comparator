@@ -163,7 +163,7 @@ services:
       - monitoring
     depends_on:
       - pushgateway
-    command: >
+    command: |-
       sh -c "
       INSTANCE=generator-1
       while true; do
@@ -210,7 +210,7 @@ services:
       - monitoring
     depends_on:
       - pushgateway
-    command: >
+    command: |-
       sh -c "
       INSTANCE=generator-2
       while true; do
@@ -241,7 +241,7 @@ services:
       - monitoring
     depends_on:
       - pushgateway
-    command: >
+    command: |-
       sh -c "
       INSTANCE=generator-3
       while true; do
