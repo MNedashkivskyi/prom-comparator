@@ -1,0 +1,298 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # PROMETHEUS STACK (Setup A: Local Rule Evaluation) - STRESS TEST CONFIG
+  # =============================================================================
+
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=2h'
+      - '--web.enable-lifecycle'
+      - '--web.listen-address=:9090'
+      # Stress test optimizations
+      - '--query.max-concurrency=50'
+      - '--query.timeout=5m'
+      - '--storage.tsdb.min-block-duration=2h'
+      - '--storage.tsdb.max-block-duration=2h'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus-stress:/etc/prometheus
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring
+    restart: unless-stopped
+    # Increase resources for stress testing
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # VictoriaMetrics as remote write destination for Prometheus
+  victoriametrics-prom-sink:
+    image: victoriametrics/victoria-metrics:v1.95.1
+    container_name: victoriametrics-prom-sink
+    command:
+      - '--storageDataPath=/storage'
+      - '--retentionPeriod=2h'
+      - '--httpListenAddr=:8428'
+      - '--memory.allowedPercent=80'
+      - '--search.maxConcurrentRequests=50'
+    ports:
+      - "8428:8428"
+    volumes:
+      - vm_prom_sink_data:/storage
+    networks:
+      - monitoring
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # =============================================================================
+  # VICTORIAMETRICS STACK (Setup B: Remote Rule Evaluation) - STRESS TEST CONFIG
+  # =============================================================================
+
+  vmagent:
+    image: victoriametrics/vmagent:v1.95.1
+    container_name: vmagent
+    command:
+      - '--promscrape.config=/etc/vmagent/vmagent-stress.yml'
+      - '--remoteWrite.url=http://victoriametrics:8428/api/v1/write'
+      - '--httpListenAddr=:8429'
+      - '--memory.allowedPercent=80'
+    ports:
+      - "8429:8429"
+    volumes:
+      - ./configs/vmagent:/etc/vmagent
+    networks:
+      - monitoring
+    depends_on:
+      - victoriametrics
+    restart: unless-stopped
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.95.1
+    container_name: victoriametrics
+    command:
+      - '--storageDataPath=/storage'
+      - '--retentionPeriod=2h'
+      - '--httpListenAddr=:8428'
+      - '--memory.allowedPercent=80'
+      - '--search.maxConcurrentRequests=50'
+    ports:
+      - "8427:8428"
+    volumes:
+      - vm_data:/storage
+    networks:
+      - monitoring
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  vmalert:
+    image: victoriametrics/vmalert:v1.95.1
+    container_name: vmalert
+    command:
+      - '--datasource.url=http://victoriametrics:8428'
+      - '--remoteWrite.url=http://victoriametrics:8428'
+      - '--remoteRead.url=http://victoriametrics:8428'
+      - '--rule=/etc/vmalert/rules/*.yml'
+      - '--evaluationInterval=10s'
+      - '--httpListenAddr=:8880'
+      - '--datasource.maxIdleConnections=100'
+    ports:
+      - "8880:8880"
+    volumes:
+      - ./configs/vmalert-stress/rules:/etc/vmalert/rules
+    networks:
+      - monitoring
+    depends_on:
+      - victoriametrics
+    restart: unless-stopped
+
+  # =============================================================================
+  # HIGH-LOAD METRICS SOURCES
+  # =============================================================================
+
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter
+    command:
+      - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  # Pushgateway for high-cardinality metrics
+  pushgateway:
+    image: prom/pushgateway:v1.6.2
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  # Multiple metrics generators for high load (scaled separately)
+  stress-generator-1:
+    image: curlimages/curl:8.5.0
+    container_name: stress-generator-1
+    networks:
+      - monitoring
+    depends_on:
+      - pushgateway
+    command: >
+      sh -c "
+      INSTANCE=generator-1
+      while true; do
+        TIMESTAMP=$$(date +%s)
+        cat <<EOF | curl --data-binary @- http://pushgateway:9091/metrics/job/stress-test/instance/$$INSTANCE 2>/dev/null
+      # High cardinality HTTP metrics
+      http_requests_total{method=\"GET\",endpoint=\"/api/users\",status=\"200\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 10000 + TIMESTAMP))
+      http_requests_total{method=\"GET\",endpoint=\"/api/users\",status=\"200\",region=\"us-west-2\",version=\"v1\"} $$((RANDOM % 10000 + TIMESTAMP))
+      http_requests_total{method=\"GET\",endpoint=\"/api/posts\",status=\"200\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 8000 + TIMESTAMP))
+      http_requests_total{method=\"POST\",endpoint=\"/api/posts\",status=\"201\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 2000 + TIMESTAMP))
+      http_requests_total{method=\"GET\",endpoint=\"/api/comments\",status=\"200\",region=\"eu-west-1\",version=\"v1\"} $$((RANDOM % 5000 + TIMESTAMP))
+      http_requests_total{method=\"GET\",endpoint=\"/api/likes\",status=\"200\",region=\"ap-south-1\",version=\"v1\"} $$((RANDOM % 3000 + TIMESTAMP))
+      http_requests_total{method=\"DELETE\",endpoint=\"/api/posts\",status=\"204\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 500 + TIMESTAMP))
+      http_requests_total{method=\"GET\",endpoint=\"/api/search\",status=\"200\",region=\"us-east-1\",version=\"v2\"} $$((RANDOM % 15000 + TIMESTAMP))
+      http_requests_total{method=\"GET\",endpoint=\"/api/users\",status=\"404\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 100 + TIMESTAMP))
+      http_requests_total{method=\"GET\",endpoint=\"/api/users\",status=\"500\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 50 + TIMESTAMP))
+      http_requests_total{method=\"POST\",endpoint=\"/api/auth\",status=\"401\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 200 + TIMESTAMP))
+      # Request duration histogram
+      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.005\"} $$((RANDOM % 1000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.01\"} $$((RANDOM % 2000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.025\"} $$((RANDOM % 4000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.05\"} $$((RANDOM % 6000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.1\"} $$((RANDOM % 8000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.25\"} $$((RANDOM % 9000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.5\"} $$((RANDOM % 9500 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"1\"} $$((RANDOM % 9800 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"+Inf\"} $$((RANDOM % 10000 + TIMESTAMP))
+      # System metrics with high cardinality
+      active_connections{service=\"api\",pod=\"api-$$((RANDOM % 20))\",az=\"us-east-1a\"} $$((RANDOM % 1000))
+      active_connections{service=\"database\",pod=\"db-$$((RANDOM % 10))\",az=\"us-east-1b\"} $$((RANDOM % 500))
+      queue_size{queue=\"jobs\",priority=\"high\",pod=\"worker-$$((RANDOM % 30))\"} $$((RANDOM % 1000))
+      queue_size{queue=\"jobs\",priority=\"low\",pod=\"worker-$$((RANDOM % 30))\"} $$((RANDOM % 5000))
+      cache_hit_ratio{cache=\"redis\",shard=\"$$((RANDOM % 8))\"} 0.$$((RANDOM % 100))
+      EOF
+        sleep 2
+      done
+      "
+    restart: unless-stopped
+
+  stress-generator-2:
+    image: curlimages/curl:8.5.0
+    container_name: stress-generator-2
+    networks:
+      - monitoring
+    depends_on:
+      - pushgateway
+    command: >
+      sh -c "
+      INSTANCE=generator-2
+      while true; do
+        TIMESTAMP=$$(date +%s)
+        cat <<EOF | curl --data-binary @- http://pushgateway:9091/metrics/job/stress-test/instance/$$INSTANCE 2>/dev/null
+      http_requests_total{method=\"GET\",endpoint=\"/api/products\",status=\"200\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 12000 + TIMESTAMP))
+      http_requests_total{method=\"GET\",endpoint=\"/api/orders\",status=\"200\",region=\"us-west-2\",version=\"v1\"} $$((RANDOM % 7000 + TIMESTAMP))
+      http_requests_total{method=\"POST\",endpoint=\"/api/checkout\",status=\"201\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 3000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"POST\",endpoint=\"/api/checkout\",le=\"0.1\"} $$((RANDOM % 1000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"POST\",endpoint=\"/api/checkout\",le=\"0.5\"} $$((RANDOM % 2500 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"POST\",endpoint=\"/api/checkout\",le=\"1\"} $$((RANDOM % 2900 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method=\"POST\",endpoint=\"/api/checkout\",le=\"+Inf\"} $$((RANDOM % 3000 + TIMESTAMP))
+      db_queries_total{db=\"postgres\",table=\"users\",operation=\"select\"} $$((RANDOM % 50000 + TIMESTAMP))
+      db_queries_total{db=\"postgres\",table=\"orders\",operation=\"insert\"} $$((RANDOM % 10000 + TIMESTAMP))
+      db_query_duration_seconds{db=\"postgres\",table=\"users\",quantile=\"0.5\"} 0.0$$((RANDOM % 100))
+      db_query_duration_seconds{db=\"postgres\",table=\"users\",quantile=\"0.95\"} 0.$$((RANDOM % 500))
+      db_query_duration_seconds{db=\"postgres\",table=\"users\",quantile=\"0.99\"} $$((RANDOM % 2))
+      EOF
+        sleep 2
+      done
+      "
+    restart: unless-stopped
+
+  stress-generator-3:
+    image: curlimages/curl:8.5.0
+    container_name: stress-generator-3
+    networks:
+      - monitoring
+    depends_on:
+      - pushgateway
+    command: >
+      sh -c "
+      INSTANCE=generator-3
+      while true; do
+        TIMESTAMP=$$(date +%s)
+        cat <<EOF | curl --data-binary @- http://pushgateway:9091/metrics/job/stress-test/instance/$$INSTANCE 2>/dev/null
+      grpc_requests_total{service=\"UserService\",method=\"GetUser\",status=\"OK\"} $$((RANDOM % 8000 + TIMESTAMP))
+      grpc_requests_total{service=\"OrderService\",method=\"CreateOrder\",status=\"OK\"} $$((RANDOM % 5000 + TIMESTAMP))
+      grpc_requests_total{service=\"PaymentService\",method=\"ProcessPayment\",status=\"OK\"} $$((RANDOM % 3000 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service=\"UserService\",le=\"0.01\"} $$((RANDOM % 7000 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service=\"UserService\",le=\"0.05\"} $$((RANDOM % 7800 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service=\"UserService\",le=\"0.1\"} $$((RANDOM % 7950 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service=\"UserService\",le=\"+Inf\"} $$((RANDOM % 8000 + TIMESTAMP))
+      kafka_messages_produced_total{topic=\"user-events\",partition=\"$$((RANDOM % 12))\"} $$((RANDOM % 100000 + TIMESTAMP))
+      kafka_messages_consumed_total{topic=\"user-events\",consumer_group=\"analytics\",partition=\"$$((RANDOM % 12))\"} $$((RANDOM % 98000 + TIMESTAMP))
+      EOF
+        sleep 2
+      done
+      "
+    restart: unless-stopped
+
+  # =============================================================================
+  # VISUALIZATION
+  # =============================================================================
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+      - victoriametrics
+      - victoriametrics-prom-sink
+    restart: unless-stopped
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  vm_prom_sink_data:
+  vm_data:
+  grafana_data:
