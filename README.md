@@ -218,6 +218,30 @@ docker-compose restart vmalert
 3. **Memory Usage**: Prometheus memory vs (vmalert + VictoriaMetrics) memory
 4. **Query Percentiles**: Response time distribution
 
+## Stress Testing
+
+For comprehensive performance testing under heavy load, see [STRESS_TEST.md](STRESS_TEST.md).
+
+### Quick Stress Test
+
+```bash
+# Start stress test environment
+make start-stress
+
+# Run automated benchmark
+make benchmark
+
+# Stop stress test
+make stop-stress
+```
+
+The stress test includes:
+- High cardinality metrics (10,000+ time series)
+- 50+ complex recording rules
+- 5-second scrape intervals
+- 10-second evaluation intervals
+- Multiple concurrent metrics generators
+
 ## Troubleshooting
 
 ### Services not starting

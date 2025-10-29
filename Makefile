@@ -1,21 +1,32 @@
-.PHONY: help start start-custom stop restart logs clean status reload-prometheus reload-vmalert
+.PHONY: help start start-custom start-stress stop stop-stress restart logs clean status reload-prometheus reload-vmalert benchmark
 
 help:
 	@echo "Prometheus vs VictoriaMetrics Comparison"
 	@echo ""
-	@echo "Available commands:"
+	@echo "Basic Commands:"
 	@echo "  make start              - Start all services (simple setup, no Docker login needed)"
 	@echo "  make start-custom       - Start with custom metrics generator (requires Docker login)"
 	@echo "  make stop               - Stop all services"
 	@echo "  make restart            - Restart all services"
+	@echo "  make status             - Show service status"
+	@echo "  make clean              - Stop and remove all containers and volumes"
+	@echo ""
+	@echo "Stress Testing:"
+	@echo "  make start-stress       - Start stress test environment (high load)"
+	@echo "  make stop-stress        - Stop stress test environment"
+	@echo "  make benchmark          - Run 30-minute benchmark (requires stress test running)"
+	@echo ""
+	@echo "Monitoring:"
 	@echo "  make logs               - Show logs from all services"
 	@echo "  make logs-prom          - Show Prometheus logs"
 	@echo "  make logs-vmalert       - Show vmalert logs"
 	@echo "  make logs-vm            - Show VictoriaMetrics logs"
-	@echo "  make status             - Show service status"
-	@echo "  make clean              - Stop and remove all containers and volumes"
+	@echo ""
+	@echo "Configuration:"
 	@echo "  make reload-prometheus  - Reload Prometheus configuration"
 	@echo "  make reload-vmalert     - Reload vmalert configuration"
+	@echo ""
+	@echo "Quick Access:"
 	@echo "  make open-grafana       - Open Grafana in browser"
 	@echo "  make open-prometheus    - Open Prometheus in browser"
 
@@ -31,9 +42,18 @@ start-custom:
 	docker-compose -f docker-compose.custom.yml up -d
 	@echo "Services started! Access Grafana at http://localhost:3000"
 
+start-stress:
+	@echo "Starting STRESS TEST environment..."
+	@echo "WARNING: This will use significant system resources!"
+	./stress-test.sh
+
 stop:
 	@echo "Stopping all services..."
 	docker-compose stop
+
+stop-stress:
+	@echo "Stopping stress test environment..."
+	docker-compose -f docker-compose.stress.yml down
 
 restart:
 	@echo "Restarting all services..."
@@ -76,3 +96,8 @@ open-grafana:
 open-prometheus:
 	@echo "Opening Prometheus..."
 	@which xdg-open > /dev/null && xdg-open http://localhost:9090 || open http://localhost:9090
+
+benchmark:
+	@echo "Running 30-minute benchmark..."
+	@echo "Make sure stress test is running first (make start-stress)"
+	./scripts/benchmark.sh 30

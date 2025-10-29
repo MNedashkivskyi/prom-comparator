@@ -1,0 +1,301 @@
+groups:
+  # ===========================================================================
+  # SIMPLE AGGREGATIONS (Baseline)
+  # ===========================================================================
+  - name: simple_aggregations
+    interval: 10s
+    rules:
+      - record: instance:node_cpu_utilization:ratio
+        expr: |
+          (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100
+
+      - record: instance:node_memory_utilization:ratio
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+
+  # ===========================================================================
+  # COMPLEX MULTI-DIMENSIONAL AGGREGATIONS
+  # ===========================================================================
+  - name: complex_aggregations
+    interval: 10s
+    rules:
+      # High cardinality aggregations
+      - record: endpoint:http_requests:rate5m
+        expr: |
+          sum by (endpoint, method, status, region, version) (rate(http_requests_total[5m]))
+
+      - record: region:http_requests:rate5m
+        expr: |
+          sum by (region, status) (rate(http_requests_total[5m]))
+
+      - record: endpoint:http_error_ratio:rate5m
+        expr: |
+          sum by (endpoint, region) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (endpoint, region) (rate(http_requests_total[5m]))
+
+      - record: version:http_success_ratio:rate5m
+        expr: |
+          sum by (version, region) (rate(http_requests_total{status=~"2.."}[5m]))
+          /
+          sum by (version, region) (rate(http_requests_total[5m]))
+
+  # ===========================================================================
+  # EXPENSIVE HISTOGRAM QUANTILES
+  # ===========================================================================
+  - name: histogram_quantiles
+    interval: 10s
+    rules:
+      # Multiple quantiles across high cardinality dimensions
+      - record: endpoint:http_request_duration_seconds:p50
+        expr: |
+          histogram_quantile(0.50,
+            sum by (endpoint, method, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: endpoint:http_request_duration_seconds:p75
+        expr: |
+          histogram_quantile(0.75,
+            sum by (endpoint, method, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: endpoint:http_request_duration_seconds:p90
+        expr: |
+          histogram_quantile(0.90,
+            sum by (endpoint, method, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: endpoint:http_request_duration_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (endpoint, method, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: endpoint:http_request_duration_seconds:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (endpoint, method, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: endpoint:http_request_duration_seconds:p999
+        expr: |
+          histogram_quantile(0.999,
+            sum by (endpoint, method, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      # GRPC quantiles
+      - record: service:grpc_request_duration_seconds:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (service, method, le) (rate(grpc_request_duration_seconds_bucket[5m]))
+          )
+
+      - record: service:grpc_request_duration_seconds:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (service, method, le) (rate(grpc_request_duration_seconds_bucket[5m]))
+          )
+
+  # ===========================================================================
+  # MULTI-LEVEL RECORDING RULES (Rules depending on other rules)
+  # ===========================================================================
+  - name: multi_level_rules
+    interval: 10s
+    rules:
+      # Level 1: Base calculations
+      - record: region:http_total_requests:rate5m
+        expr: |
+          sum by (region) (endpoint:http_requests:rate5m)
+
+      - record: region:http_error_requests:rate5m
+        expr: |
+          sum by (region) (endpoint:http_requests:rate5m{status=~"5.."})
+
+      # Level 2: Calculations based on level 1
+      - record: cluster:http_total_requests:rate5m
+        expr: |
+          sum(region:http_total_requests:rate5m)
+
+      - record: cluster:http_error_ratio:rate5m
+        expr: |
+          sum(region:http_error_requests:rate5m)
+          /
+          sum(region:http_total_requests:rate5m)
+
+      # Level 3: Aggregations of level 2
+      - record: global:http_requests_per_second:avg
+        expr: |
+          avg_over_time(cluster:http_total_requests:rate5m[5m])
+
+  # ===========================================================================
+  # HEAVY COMPUTATIONAL RULES (Multiple operations and functions)
+  # ===========================================================================
+  - name: heavy_computations
+    interval: 10s
+    rules:
+      # Complex calculations with multiple operations
+      - record: endpoint:http_throughput_mb:rate5m
+        expr: |
+          (
+            sum by (endpoint) (rate(http_requests_total[5m]))
+            *
+            avg by (endpoint) (http_request_duration_seconds{quantile="0.5"})
+            *
+            1024
+          ) / 1024 / 1024
+
+      # Weighted averages
+      - record: region:http_weighted_latency:avg
+        expr: |
+          sum by (region) (
+            rate(http_requests_total[5m])
+            *
+            endpoint:http_request_duration_seconds:p95
+          )
+          /
+          sum by (region) (rate(http_requests_total[5m]))
+
+      # Standard deviation calculations
+      - record: endpoint:http_requests:stddev
+        expr: |
+          sqrt(
+            sum by (endpoint) (rate(http_requests_total[5m]))
+            -
+            avg by (endpoint) (rate(http_requests_total[5m])) ^ 2
+          )
+
+      # Complex ratio with multiple dimensions
+      - record: pod:resource_utilization:score
+        expr: |
+          (
+            avg by (pod) (active_connections) / 1000
+            +
+            avg by (pod) (queue_size) / 500
+          ) * 100
+
+  # ===========================================================================
+  # HIGH CARDINALITY AGGREGATIONS
+  # ===========================================================================
+  - name: high_cardinality_rules
+    interval: 10s
+    rules:
+      # Aggregate across many label combinations
+      - record: pod:active_connections:sum
+        expr: |
+          sum by (pod, service, az) (active_connections)
+
+      - record: shard:cache_hit_ratio:avg
+        expr: |
+          avg by (cache, shard) (cache_hit_ratio)
+
+      - record: partition:kafka_lag:sum
+        expr: |
+          (
+            sum by (topic, partition) (kafka_messages_produced_total)
+            -
+            sum by (topic, partition) (kafka_messages_consumed_total)
+          )
+
+      # Cross-metric joins
+      - record: queue:processing_rate_vs_size:ratio
+        expr: |
+          sum by (queue) (rate(http_requests_total[5m]))
+          /
+          avg by (queue) (queue_size)
+
+  # ===========================================================================
+  # TIME-INTENSIVE LOOKBACK WINDOWS
+  # ===========================================================================
+  - name: long_lookback_rules
+    interval: 10s
+    rules:
+      - record: endpoint:http_requests:rate30m
+        expr: |
+          sum by (endpoint, method, status) (rate(http_requests_total[30m]))
+
+      - record: endpoint:http_request_duration:p95_30m
+        expr: |
+          histogram_quantile(0.95,
+            sum by (endpoint, le) (rate(http_request_duration_seconds_bucket[30m]))
+          )
+
+      - record: region:http_error_ratio:rate1h
+        expr: |
+          sum by (region) (rate(http_requests_total{status=~"5.."}[1h]))
+          /
+          sum by (region) (rate(http_requests_total[1h]))
+
+  # ===========================================================================
+  # SUBQUERY-BASED RULES (Most expensive)
+  # ===========================================================================
+  - name: subquery_rules
+    interval: 10s
+    rules:
+      # Moving averages
+      - record: endpoint:http_requests:rate5m_avg10m
+        expr: |
+          avg_over_time(
+            (sum by (endpoint) (rate(http_requests_total[5m])))[10m:1m]
+          )
+
+      # Rate of change
+      - record: endpoint:http_requests:growth_rate
+        expr: |
+          deriv(
+            (sum by (endpoint) (rate(http_requests_total[5m])))[15m:1m]
+          )
+
+      # Peak detection
+      - record: endpoint:http_requests:max_rate_10m
+        expr: |
+          max_over_time(
+            (sum by (endpoint) (rate(http_requests_total[1m])))[10m:15s]
+          )
+
+  # ===========================================================================
+  # DATABASE QUERY PERFORMANCE
+  # ===========================================================================
+  - name: database_rules
+    interval: 10s
+    rules:
+      - record: table:db_queries:rate5m
+        expr: |
+          sum by (db, table, operation) (rate(db_queries_total[5m]))
+
+      - record: table:db_query_duration:p99
+        expr: |
+          max by (db, table) (db_query_duration_seconds{quantile="0.99"})
+
+      - record: table:db_slow_queries:rate5m
+        expr: |
+          sum by (db, table) (
+            rate(db_queries_total[5m])
+          )
+          and
+          db_query_duration_seconds{quantile="0.99"} > 1
+
+  # ===========================================================================
+  # RULE EVALUATION SELF-MONITORING
+  # ===========================================================================
+  - name: rule_evaluation_metrics
+    interval: 10s
+    rules:
+      - record: prometheus:rule_evaluation_duration_seconds:avg
+        expr: |
+          avg(prometheus_rule_evaluation_duration_seconds)
+
+      - record: prometheus:rule_evaluation_duration_seconds:max
+        expr: |
+          max(prometheus_rule_evaluation_duration_seconds)
+
+      - record: prometheus:rule_evaluation_failures:rate5m
+        expr: |
+          rate(prometheus_rule_evaluation_failures_total[5m])
+
+      - record: prometheus:rule_group_duration_seconds:max
+        expr: |
+          max by (rule_group) (prometheus_rule_group_duration_seconds)
+
+      - record: prometheus:rule_group_duration_seconds:sum
+        expr: |
+          sum(prometheus_rule_group_duration_seconds)
