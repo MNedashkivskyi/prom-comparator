@@ -1,0 +1,163 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # PROMETHEUS STACK (Setup A: Local Rule Evaluation)
+  # =============================================================================
+
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=2h'
+      - '--web.enable-lifecycle'
+      - '--web.listen-address=:9090'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  # VictoriaMetrics as remote write destination for Prometheus
+  victoriametrics-prom-sink:
+    image: victoriametrics/victoria-metrics:v1.95.1
+    container_name: victoriametrics-prom-sink
+    command:
+      - '--storageDataPath=/storage'
+      - '--retentionPeriod=2h'
+      - '--httpListenAddr=:8428'
+    ports:
+      - "8428:8428"
+    volumes:
+      - vm_prom_sink_data:/storage
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  # =============================================================================
+  # VICTORIAMETRICS STACK (Setup B: Remote Rule Evaluation)
+  # =============================================================================
+
+  vmagent:
+    image: victoriametrics/vmagent:v1.95.1
+    container_name: vmagent
+    command:
+      - '--promscrape.config=/etc/vmagent/vmagent.yml'
+      - '--remoteWrite.url=http://victoriametrics:8428/api/v1/write'
+      - '--httpListenAddr=:8429'
+    ports:
+      - "8429:8429"
+    volumes:
+      - ./configs/vmagent:/etc/vmagent
+    networks:
+      - monitoring
+    depends_on:
+      - victoriametrics
+    restart: unless-stopped
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.95.1
+    container_name: victoriametrics
+    command:
+      - '--storageDataPath=/storage'
+      - '--retentionPeriod=2h'
+      - '--httpListenAddr=:8428'
+    ports:
+      - "8427:8428"
+    volumes:
+      - vm_data:/storage
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  vmalert:
+    image: victoriametrics/vmalert:v1.95.1
+    container_name: vmalert
+    command:
+      - '--datasource.url=http://victoriametrics:8428'
+      - '--remoteWrite.url=http://victoriametrics:8428'
+      - '--remoteRead.url=http://victoriametrics:8428'
+      - '--rule=/etc/vmalert/rules/*.yml'
+      - '--evaluationInterval=15s'
+      - '--httpListenAddr=:8880'
+    ports:
+      - "8880:8880"
+    volumes:
+      - ./configs/vmalert/rules:/etc/vmalert/rules
+    networks:
+      - monitoring
+    depends_on:
+      - victoriametrics
+    restart: unless-stopped
+
+  # =============================================================================
+  # METRICS SOURCES (Shared by both stacks)
+  # =============================================================================
+
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter
+    command:
+      - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  # Custom metrics generator for testing
+  metrics-generator:
+    build:
+      context: ./metrics-generator
+      dockerfile: Dockerfile
+    container_name: metrics-generator
+    ports:
+      - "8080:8080"
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  # =============================================================================
+  # VISUALIZATION
+  # =============================================================================
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+      - victoriametrics
+      - victoriametrics-prom-sink
+    restart: unless-stopped
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  vm_prom_sink_data:
+  vm_data:
+  grafana_data:

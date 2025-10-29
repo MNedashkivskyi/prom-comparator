@@ -1,0 +1,82 @@
+groups:
+  - name: recording_rules_performance_test
+    interval: 15s
+    rules:
+      # Simple aggregation rules
+      - record: instance:node_cpu_utilization:ratio
+        expr: |
+          (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100
+
+      - record: instance:node_memory_utilization:ratio
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+
+      - record: instance:node_filesystem_utilization:ratio
+        expr: |
+          (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"} / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"})) * 100
+
+      # Complex aggregation rules with multiple operations
+      - record: job:http_requests:rate5m
+        expr: |
+          sum by (job, status) (rate(http_requests_total[5m]))
+
+      - record: job:http_requests_success:rate5m
+        expr: |
+          sum by (job) (rate(http_requests_total{status=~"2.."}[5m]))
+
+      - record: job:http_requests_error_ratio:rate5m
+        expr: |
+          sum by (job) (rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          sum by (job) (rate(http_requests_total[5m]))
+
+      # Quantile calculations (more expensive)
+      - record: job:http_request_duration_seconds:p50
+        expr: |
+          histogram_quantile(0.50, sum by (job, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: job:http_request_duration_seconds:p95
+        expr: |
+          histogram_quantile(0.95, sum by (job, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: job:http_request_duration_seconds:p99
+        expr: |
+          histogram_quantile(0.99, sum by (job, le) (rate(http_request_duration_seconds_bucket[5m])))
+
+      # Multi-level recording rules (rule depending on another rule)
+      - record: cluster:node_cpu_utilization:avg
+        expr: |
+          avg(instance:node_cpu_utilization:ratio)
+
+      - record: cluster:node_memory_utilization:avg
+        expr: |
+          avg(instance:node_memory_utilization:ratio)
+
+      # Heavy computation rules with joins
+      - record: instance:network_transmit_rate:bytes
+        expr: |
+          sum by (instance) (rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*"}[5m]))
+
+      - record: instance:network_receive_rate:bytes
+        expr: |
+          sum by (instance) (rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*"}[5m]))
+
+      - record: instance:network_total_rate:bytes
+        expr: |
+          instance:network_transmit_rate:bytes + instance:network_receive_rate:bytes
+
+  # Rules for monitoring rule evaluation itself
+  - name: rule_evaluation_metrics
+    interval: 15s
+    rules:
+      - record: vmalert:rule_evaluation_duration_seconds:avg
+        expr: |
+          avg(vmalert_iteration_duration_seconds)
+
+      - record: vmalert:rule_evaluation_errors:rate5m
+        expr: |
+          rate(vmalert_execution_errors_total[5m])
+
+      - record: vmalert:rule_group_duration_seconds:max
+        expr: |
+          max by (group) (vmalert_iteration_duration_seconds)

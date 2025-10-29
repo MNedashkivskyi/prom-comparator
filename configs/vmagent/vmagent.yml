@@ -1,0 +1,41 @@
+global:
+  scrape_interval: 15s
+  external_labels:
+    cluster: 'victoriametrics-remote'
+    replica: '1'
+
+scrape_configs:
+  # Scrape vmagent itself for monitoring
+  - job_name: 'vmagent'
+    static_configs:
+      - targets: ['localhost:8429']
+        labels:
+          source: 'victoriametrics-stack'
+
+  # Scrape node-exporter (same as Prometheus)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          source: 'victoriametrics-stack'
+
+  # Scrape custom metrics generator (same as Prometheus)
+  - job_name: 'metrics-generator'
+    static_configs:
+      - targets: ['metrics-generator:8080']
+        labels:
+          source: 'victoriametrics-stack'
+
+  # Scrape VictoriaMetrics metrics
+  - job_name: 'victoriametrics'
+    static_configs:
+      - targets: ['victoriametrics:8428']
+        labels:
+          source: 'victoriametrics-stack'
+
+  # Scrape vmalert metrics
+  - job_name: 'vmalert'
+    static_configs:
+      - targets: ['vmalert:8880']
+        labels:
+          source: 'victoriametrics-stack'
