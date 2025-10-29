@@ -165,7 +165,7 @@ services:
       - pushgateway
     command: |-
       sh -c "
-      INSTANCE=generator-1
+      INSTANCE=$(hostname)
       while true; do
         TIMESTAMP=$$(date +%s)
         cat <<EOF | curl --data-binary @- http://pushgateway:9091/metrics/job/stress-test/instance/$$INSTANCE 2>/dev/null
@@ -212,7 +212,7 @@ services:
       - pushgateway
     command: |-
       sh -c "
-      INSTANCE=generator-2
+      INSTANCE=$(hostname)
       while true; do
         TIMESTAMP=$$(date +%s)
         cat <<EOF | curl --data-binary @- http://pushgateway:9091/metrics/job/stress-test/instance/$$INSTANCE 2>/dev/null
@@ -243,7 +243,7 @@ services:
       - pushgateway
     command: |-
       sh -c "
-      INSTANCE=generator-3
+      INSTANCE=$(hostname)
       while true; do
         TIMESTAMP=$$(date +%s)
         cat <<EOF | curl --data-binary @- http://pushgateway:9091/metrics/job/stress-test/instance/$$INSTANCE 2>/dev/null
