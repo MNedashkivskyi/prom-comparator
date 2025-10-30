@@ -236,11 +236,14 @@ make stop-stress
 ```
 
 The stress test includes:
-- High cardinality metrics (10,000+ time series)
-- 50+ complex recording rules
-- 5-second scrape intervals
-- 10-second evaluation intervals
-- Multiple concurrent metrics generators
+- **Very high cardinality metrics** (~15,000 time series target)
+- **Extended label dimensions**: tenant, datacenter, environment, cluster, team
+- **120 complex recording rules** including multi-level aggregations and histogram quantiles
+- **3-second scrape intervals** (very aggressive)
+- **1-second metric push intervals** from generators
+- 10-second rule evaluation intervals
+- **Scalable generators**: Use hostname for unique metrics when scaled
+- Multiple metric types: HTTP, database, Kafka, gRPC, cache, queue, connection pool metrics
 
 ## Troubleshooting
 

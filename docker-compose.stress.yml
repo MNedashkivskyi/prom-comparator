@@ -158,108 +158,181 @@ services:
   # Multiple metrics generators for high load (scaled separately)
   stress-generator-1:
     image: curlimages/curl:8.5.0
-    container_name: stress-generator-1
     networks:
       - monitoring
     depends_on:
       - pushgateway
-    command: >
-      sh -c "
-      INSTANCE=generator-1
+    command: |-
+      sh -c '
+      INSTANCE=$$(hostname)
+      TENANT=tenant-$$((RANDOM % 3 + 1))
+      DC=dc-$$((RANDOM % 4 + 1))
+      ENV=$$( [ $$((RANDOM % 2)) -eq 0 ] && echo "prod" || echo "staging" )
+      CLUSTER=cluster-$$((RANDOM % 5 + 1))
       while true; do
         TIMESTAMP=$$(date +%s)
         cat <<EOF | curl --data-binary @- http://pushgateway:9091/metrics/job/stress-test/instance/$$INSTANCE 2>/dev/null
-      # High cardinality HTTP metrics
-      http_requests_total{method=\"GET\",endpoint=\"/api/users\",status=\"200\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 10000 + TIMESTAMP))
-      http_requests_total{method=\"GET\",endpoint=\"/api/users\",status=\"200\",region=\"us-west-2\",version=\"v1\"} $$((RANDOM % 10000 + TIMESTAMP))
-      http_requests_total{method=\"GET\",endpoint=\"/api/posts\",status=\"200\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 8000 + TIMESTAMP))
-      http_requests_total{method=\"POST\",endpoint=\"/api/posts\",status=\"201\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 2000 + TIMESTAMP))
-      http_requests_total{method=\"GET\",endpoint=\"/api/comments\",status=\"200\",region=\"eu-west-1\",version=\"v1\"} $$((RANDOM % 5000 + TIMESTAMP))
-      http_requests_total{method=\"GET\",endpoint=\"/api/likes\",status=\"200\",region=\"ap-south-1\",version=\"v1\"} $$((RANDOM % 3000 + TIMESTAMP))
-      http_requests_total{method=\"DELETE\",endpoint=\"/api/posts\",status=\"204\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 500 + TIMESTAMP))
-      http_requests_total{method=\"GET\",endpoint=\"/api/search\",status=\"200\",region=\"us-east-1\",version=\"v2\"} $$((RANDOM % 15000 + TIMESTAMP))
-      http_requests_total{method=\"GET\",endpoint=\"/api/users\",status=\"404\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 100 + TIMESTAMP))
-      http_requests_total{method=\"GET\",endpoint=\"/api/users\",status=\"500\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 50 + TIMESTAMP))
-      http_requests_total{method=\"POST\",endpoint=\"/api/auth\",status=\"401\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 200 + TIMESTAMP))
-      # Request duration histogram
-      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.005\"} $$((RANDOM % 1000 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.01\"} $$((RANDOM % 2000 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.025\"} $$((RANDOM % 4000 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.05\"} $$((RANDOM % 6000 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.1\"} $$((RANDOM % 8000 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.25\"} $$((RANDOM % 9000 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"0.5\"} $$((RANDOM % 9500 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"1\"} $$((RANDOM % 9800 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/api/users\",le=\"+Inf\"} $$((RANDOM % 10000 + TIMESTAMP))
-      # System metrics with high cardinality
-      active_connections{service=\"api\",pod=\"api-$$((RANDOM % 20))\",az=\"us-east-1a\"} $$((RANDOM % 1000))
-      active_connections{service=\"database\",pod=\"db-$$((RANDOM % 10))\",az=\"us-east-1b\"} $$((RANDOM % 500))
-      queue_size{queue=\"jobs\",priority=\"high\",pod=\"worker-$$((RANDOM % 30))\"} $$((RANDOM % 1000))
-      queue_size{queue=\"jobs\",priority=\"low\",pod=\"worker-$$((RANDOM % 30))\"} $$((RANDOM % 5000))
-      cache_hit_ratio{cache=\"redis\",shard=\"$$((RANDOM % 8))\"} 0.$$((RANDOM % 100))
+      # High cardinality HTTP metrics with extended labels
+      http_requests_total{method="GET",endpoint="/api/users",status="200",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 10000 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/users",status="200",region="us-west-2",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 10000 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/posts",status="200",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 8000 + TIMESTAMP))
+      http_requests_total{method="POST",endpoint="/api/posts",status="201",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 2000 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/comments",status="200",region="eu-west-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 5000 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/likes",status="200",region="ap-south-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 3000 + TIMESTAMP))
+      http_requests_total{method="DELETE",endpoint="/api/posts",status="204",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 500 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/search",status="200",region="us-east-1",version="v2",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 15000 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/notifications",status="200",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 7000 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/messages",status="200",region="eu-west-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 6000 + TIMESTAMP))
+      http_requests_total{method="POST",endpoint="/api/media",status="201",region="us-west-2",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 4000 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/users",status="404",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 100 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/users",status="500",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 50 + TIMESTAMP))
+      http_requests_total{method="POST",endpoint="/api/auth",status="401",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 200 + TIMESTAMP))
+      # Request duration histograms with multiple endpoints
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/users",tenant="$$TENANT",datacenter="$$DC",le="0.005"} $$((RANDOM % 1000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/users",tenant="$$TENANT",datacenter="$$DC",le="0.01"} $$((RANDOM % 2000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/users",tenant="$$TENANT",datacenter="$$DC",le="0.025"} $$((RANDOM % 4000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/users",tenant="$$TENANT",datacenter="$$DC",le="0.05"} $$((RANDOM % 6000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/users",tenant="$$TENANT",datacenter="$$DC",le="0.1"} $$((RANDOM % 8000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/users",tenant="$$TENANT",datacenter="$$DC",le="0.25"} $$((RANDOM % 9000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/users",tenant="$$TENANT",datacenter="$$DC",le="0.5"} $$((RANDOM % 9500 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/users",tenant="$$TENANT",datacenter="$$DC",le="1"} $$((RANDOM % 9800 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/users",tenant="$$TENANT",datacenter="$$DC",le="+Inf"} $$((RANDOM % 10000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/posts",tenant="$$TENANT",datacenter="$$DC",le="0.01"} $$((RANDOM % 1500 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/posts",tenant="$$TENANT",datacenter="$$DC",le="0.05"} $$((RANDOM % 5000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/posts",tenant="$$TENANT",datacenter="$$DC",le="0.1"} $$((RANDOM % 7000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="GET",endpoint="/api/posts",tenant="$$TENANT",datacenter="$$DC",le="+Inf"} $$((RANDOM % 8000 + TIMESTAMP))
+      # System metrics with very high cardinality
+      active_connections{service="api",pod="api-$$(( RANDOM % 20 ))",az="us-east-1a",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 1000))
+      active_connections{service="api",pod="api-$$(( RANDOM % 20 ))",az="us-east-1b",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 1000))
+      active_connections{service="database",pod="db-$$(( RANDOM % 10 ))",az="us-east-1a",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 500))
+      active_connections{service="cache",pod="cache-$$(( RANDOM % 15 ))",az="us-east-1a",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 2000))
+      queue_size{queue="jobs",priority="high",pod="worker-$$(( RANDOM % 30 ))",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 1000))
+      queue_size{queue="jobs",priority="medium",pod="worker-$$(( RANDOM % 30 ))",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 2000))
+      queue_size{queue="jobs",priority="low",pod="worker-$$(( RANDOM % 30 ))",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 5000))
+      queue_size{queue="notifications",priority="high",pod="worker-$$(( RANDOM % 30 ))",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 800))
+      cache_hit_ratio{cache="redis",shard="$$(( RANDOM % 8 ))",tenant="$$TENANT",datacenter="$$DC"} 0.$$((RANDOM % 100))
+      cache_hit_ratio{cache="memcached",shard="$$(( RANDOM % 6 ))",tenant="$$TENANT",datacenter="$$DC"} 0.$$((RANDOM % 100))
       EOF
-        sleep 2
+        sleep 1
       done
-      "
+      '
     restart: unless-stopped
 
   stress-generator-2:
     image: curlimages/curl:8.5.0
-    container_name: stress-generator-2
     networks:
       - monitoring
     depends_on:
       - pushgateway
-    command: >
-      sh -c "
-      INSTANCE=generator-2
+    command: |-
+      sh -c '
+      INSTANCE=$$(hostname)
+      TENANT=tenant-$$((RANDOM % 3 + 1))
+      DC=dc-$$((RANDOM % 4 + 1))
+      ENV=$$( [ $$((RANDOM % 2)) -eq 0 ] && echo "prod" || echo "staging" )
+      CLUSTER=cluster-$$((RANDOM % 5 + 1))
+      TEAM=team-$$((RANDOM % 4 + 1))
       while true; do
         TIMESTAMP=$$(date +%s)
         cat <<EOF | curl --data-binary @- http://pushgateway:9091/metrics/job/stress-test/instance/$$INSTANCE 2>/dev/null
-      http_requests_total{method=\"GET\",endpoint=\"/api/products\",status=\"200\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 12000 + TIMESTAMP))
-      http_requests_total{method=\"GET\",endpoint=\"/api/orders\",status=\"200\",region=\"us-west-2\",version=\"v1\"} $$((RANDOM % 7000 + TIMESTAMP))
-      http_requests_total{method=\"POST\",endpoint=\"/api/checkout\",status=\"201\",region=\"us-east-1\",version=\"v1\"} $$((RANDOM % 3000 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"POST\",endpoint=\"/api/checkout\",le=\"0.1\"} $$((RANDOM % 1000 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"POST\",endpoint=\"/api/checkout\",le=\"0.5\"} $$((RANDOM % 2500 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"POST\",endpoint=\"/api/checkout\",le=\"1\"} $$((RANDOM % 2900 + TIMESTAMP))
-      http_request_duration_seconds_bucket{method=\"POST\",endpoint=\"/api/checkout\",le=\"+Inf\"} $$((RANDOM % 3000 + TIMESTAMP))
-      db_queries_total{db=\"postgres\",table=\"users\",operation=\"select\"} $$((RANDOM % 50000 + TIMESTAMP))
-      db_queries_total{db=\"postgres\",table=\"orders\",operation=\"insert\"} $$((RANDOM % 10000 + TIMESTAMP))
-      db_query_duration_seconds{db=\"postgres\",table=\"users\",quantile=\"0.5\"} 0.0$$((RANDOM % 100))
-      db_query_duration_seconds{db=\"postgres\",table=\"users\",quantile=\"0.95\"} 0.$$((RANDOM % 500))
-      db_query_duration_seconds{db=\"postgres\",table=\"users\",quantile=\"0.99\"} $$((RANDOM % 2))
+      # E-commerce HTTP metrics with extended labels
+      http_requests_total{method="GET",endpoint="/api/products",status="200",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 12000 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/orders",status="200",region="us-west-2",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 7000 + TIMESTAMP))
+      http_requests_total{method="POST",endpoint="/api/checkout",status="201",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 3000 + TIMESTAMP))
+      http_requests_total{method="GET",endpoint="/api/cart",status="200",region="us-east-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 9000 + TIMESTAMP))
+      http_requests_total{method="PUT",endpoint="/api/inventory",status="200",region="eu-west-1",version="v1",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 4000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="POST",endpoint="/api/checkout",tenant="$$TENANT",datacenter="$$DC",le="0.1"} $$((RANDOM % 1000 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="POST",endpoint="/api/checkout",tenant="$$TENANT",datacenter="$$DC",le="0.5"} $$((RANDOM % 2500 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="POST",endpoint="/api/checkout",tenant="$$TENANT",datacenter="$$DC",le="1"} $$((RANDOM % 2900 + TIMESTAMP))
+      http_request_duration_seconds_bucket{method="POST",endpoint="/api/checkout",tenant="$$TENANT",datacenter="$$DC",le="+Inf"} $$((RANDOM % 3000 + TIMESTAMP))
+      # Extensive database metrics with high cardinality
+      db_queries_total{db="postgres",table="users",operation="select",tenant="$$TENANT",datacenter="$$DC",team="$$TEAM"} $$((RANDOM % 50000 + TIMESTAMP))
+      db_queries_total{db="postgres",table="orders",operation="insert",tenant="$$TENANT",datacenter="$$DC",team="$$TEAM"} $$((RANDOM % 10000 + TIMESTAMP))
+      db_queries_total{db="postgres",table="orders",operation="select",tenant="$$TENANT",datacenter="$$DC",team="$$TEAM"} $$((RANDOM % 30000 + TIMESTAMP))
+      db_queries_total{db="postgres",table="products",operation="select",tenant="$$TENANT",datacenter="$$DC",team="$$TEAM"} $$((RANDOM % 40000 + TIMESTAMP))
+      db_queries_total{db="postgres",table="products",operation="update",tenant="$$TENANT",datacenter="$$DC",team="$$TEAM"} $$((RANDOM % 5000 + TIMESTAMP))
+      db_queries_total{db="postgres",table="inventory",operation="update",tenant="$$TENANT",datacenter="$$DC",team="$$TEAM"} $$((RANDOM % 8000 + TIMESTAMP))
+      db_queries_total{db="mysql",table="sessions",operation="select",tenant="$$TENANT",datacenter="$$DC",team="$$TEAM"} $$((RANDOM % 60000 + TIMESTAMP))
+      db_queries_total{db="mysql",table="sessions",operation="delete",tenant="$$TENANT",datacenter="$$DC",team="$$TEAM"} $$((RANDOM % 3000 + TIMESTAMP))
+      db_queries_total{db="mysql",table="cache",operation="select",tenant="$$TENANT",datacenter="$$DC",team="$$TEAM"} $$((RANDOM % 70000 + TIMESTAMP))
+      db_query_duration_seconds{db="postgres",table="users",quantile="0.5",tenant="$$TENANT",datacenter="$$DC"} 0.0$$((RANDOM % 100))
+      db_query_duration_seconds{db="postgres",table="users",quantile="0.95",tenant="$$TENANT",datacenter="$$DC"} 0.$$((RANDOM % 500))
+      db_query_duration_seconds{db="postgres",table="users",quantile="0.99",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 2))
+      db_query_duration_seconds{db="postgres",table="orders",quantile="0.5",tenant="$$TENANT",datacenter="$$DC"} 0.0$$((RANDOM % 150))
+      db_query_duration_seconds{db="postgres",table="orders",quantile="0.95",tenant="$$TENANT",datacenter="$$DC"} 0.$$((RANDOM % 600))
+      db_query_duration_seconds{db="postgres",table="orders",quantile="0.99",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 3))
+      # Connection pool metrics
+      db_connection_pool_active{db="postgres",pool="main",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 50))
+      db_connection_pool_idle{db="postgres",pool="main",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 20))
+      db_connection_pool_waiting{db="postgres",pool="main",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 10))
+      db_connection_pool_active{db="mysql",pool="sessions",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 80))
+      db_connection_pool_idle{db="mysql",pool="sessions",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 30))
       EOF
-        sleep 2
+        sleep 1
       done
-      "
+      '
     restart: unless-stopped
 
   stress-generator-3:
     image: curlimages/curl:8.5.0
-    container_name: stress-generator-3
     networks:
       - monitoring
     depends_on:
       - pushgateway
-    command: >
-      sh -c "
-      INSTANCE=generator-3
+    command: |-
+      sh -c '
+      INSTANCE=$$(hostname)
+      TENANT=tenant-$$((RANDOM % 3 + 1))
+      DC=dc-$$((RANDOM % 4 + 1))
+      ENV=$$( [ $$((RANDOM % 2)) -eq 0 ] && echo "prod" || echo "staging" )
+      CLUSTER=cluster-$$((RANDOM % 5 + 1))
+      TEAM=team-$$((RANDOM % 4 + 1))
       while true; do
         TIMESTAMP=$$(date +%s)
         cat <<EOF | curl --data-binary @- http://pushgateway:9091/metrics/job/stress-test/instance/$$INSTANCE 2>/dev/null
-      grpc_requests_total{service=\"UserService\",method=\"GetUser\",status=\"OK\"} $$((RANDOM % 8000 + TIMESTAMP))
-      grpc_requests_total{service=\"OrderService\",method=\"CreateOrder\",status=\"OK\"} $$((RANDOM % 5000 + TIMESTAMP))
-      grpc_requests_total{service=\"PaymentService\",method=\"ProcessPayment\",status=\"OK\"} $$((RANDOM % 3000 + TIMESTAMP))
-      grpc_request_duration_seconds_bucket{service=\"UserService\",le=\"0.01\"} $$((RANDOM % 7000 + TIMESTAMP))
-      grpc_request_duration_seconds_bucket{service=\"UserService\",le=\"0.05\"} $$((RANDOM % 7800 + TIMESTAMP))
-      grpc_request_duration_seconds_bucket{service=\"UserService\",le=\"0.1\"} $$((RANDOM % 7950 + TIMESTAMP))
-      grpc_request_duration_seconds_bucket{service=\"UserService\",le=\"+Inf\"} $$((RANDOM % 8000 + TIMESTAMP))
-      kafka_messages_produced_total{topic=\"user-events\",partition=\"$$((RANDOM % 12))\"} $$((RANDOM % 100000 + TIMESTAMP))
-      kafka_messages_consumed_total{topic=\"user-events\",consumer_group=\"analytics\",partition=\"$$((RANDOM % 12))\"} $$((RANDOM % 98000 + TIMESTAMP))
+      # Extensive gRPC metrics with high cardinality
+      grpc_requests_total{service="UserService",method="GetUser",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 8000 + TIMESTAMP))
+      grpc_requests_total{service="UserService",method="CreateUser",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 3000 + TIMESTAMP))
+      grpc_requests_total{service="UserService",method="UpdateUser",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 2000 + TIMESTAMP))
+      grpc_requests_total{service="OrderService",method="CreateOrder",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 5000 + TIMESTAMP))
+      grpc_requests_total{service="OrderService",method="GetOrder",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 7000 + TIMESTAMP))
+      grpc_requests_total{service="OrderService",method="CancelOrder",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 1000 + TIMESTAMP))
+      grpc_requests_total{service="PaymentService",method="ProcessPayment",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 3000 + TIMESTAMP))
+      grpc_requests_total{service="PaymentService",method="RefundPayment",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 500 + TIMESTAMP))
+      grpc_requests_total{service="InventoryService",method="CheckStock",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 10000 + TIMESTAMP))
+      grpc_requests_total{service="InventoryService",method="ReserveStock",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 4000 + TIMESTAMP))
+      grpc_requests_total{service="NotificationService",method="SendEmail",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 6000 + TIMESTAMP))
+      grpc_requests_total{service="NotificationService",method="SendSMS",status="OK",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 2000 + TIMESTAMP))
+      # gRPC error responses
+      grpc_requests_total{service="UserService",method="GetUser",status="NOT_FOUND",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 200 + TIMESTAMP))
+      grpc_requests_total{service="PaymentService",method="ProcessPayment",status="FAILED_PRECONDITION",tenant="$$TENANT",datacenter="$$DC",environment="$$ENV",cluster="$$CLUSTER"} $$((RANDOM % 100 + TIMESTAMP))
+      # gRPC duration histograms
+      grpc_request_duration_seconds_bucket{service="UserService",method="GetUser",tenant="$$TENANT",datacenter="$$DC",le="0.01"} $$((RANDOM % 7000 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service="UserService",method="GetUser",tenant="$$TENANT",datacenter="$$DC",le="0.05"} $$((RANDOM % 7800 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service="UserService",method="GetUser",tenant="$$TENANT",datacenter="$$DC",le="0.1"} $$((RANDOM % 7950 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service="UserService",method="GetUser",tenant="$$TENANT",datacenter="$$DC",le="+Inf"} $$((RANDOM % 8000 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service="OrderService",method="CreateOrder",tenant="$$TENANT",datacenter="$$DC",le="0.05"} $$((RANDOM % 3000 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service="OrderService",method="CreateOrder",tenant="$$TENANT",datacenter="$$DC",le="0.1"} $$((RANDOM % 4500 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service="OrderService",method="CreateOrder",tenant="$$TENANT",datacenter="$$DC",le="0.5"} $$((RANDOM % 4900 + TIMESTAMP))
+      grpc_request_duration_seconds_bucket{service="OrderService",method="CreateOrder",tenant="$$TENANT",datacenter="$$DC",le="+Inf"} $$((RANDOM % 5000 + TIMESTAMP))
+      # Extensive Kafka metrics with high cardinality
+      kafka_messages_produced_total{topic="user-events",partition="$$(( RANDOM % 12 ))",tenant="$$TENANT",datacenter="$$DC",cluster="$$CLUSTER"} $$((RANDOM % 100000 + TIMESTAMP))
+      kafka_messages_produced_total{topic="order-events",partition="$$(( RANDOM % 16 ))",tenant="$$TENANT",datacenter="$$DC",cluster="$$CLUSTER"} $$((RANDOM % 80000 + TIMESTAMP))
+      kafka_messages_produced_total{topic="payment-events",partition="$$(( RANDOM % 8 ))",tenant="$$TENANT",datacenter="$$DC",cluster="$$CLUSTER"} $$((RANDOM % 50000 + TIMESTAMP))
+      kafka_messages_produced_total{topic="inventory-events",partition="$$(( RANDOM % 12 ))",tenant="$$TENANT",datacenter="$$DC",cluster="$$CLUSTER"} $$((RANDOM % 90000 + TIMESTAMP))
+      kafka_messages_consumed_total{topic="user-events",consumer_group="analytics",partition="$$(( RANDOM % 12 ))",tenant="$$TENANT",datacenter="$$DC",cluster="$$CLUSTER"} $$((RANDOM % 98000 + TIMESTAMP))
+      kafka_messages_consumed_total{topic="user-events",consumer_group="notifications",partition="$$(( RANDOM % 12 ))",tenant="$$TENANT",datacenter="$$DC",cluster="$$CLUSTER"} $$((RANDOM % 97000 + TIMESTAMP))
+      kafka_messages_consumed_total{topic="order-events",consumer_group="analytics",partition="$$(( RANDOM % 16 ))",tenant="$$TENANT",datacenter="$$DC",cluster="$$CLUSTER"} $$((RANDOM % 78000 + TIMESTAMP))
+      kafka_messages_consumed_total{topic="order-events",consumer_group="fulfillment",partition="$$(( RANDOM % 16 ))",tenant="$$TENANT",datacenter="$$DC",cluster="$$CLUSTER"} $$((RANDOM % 79000 + TIMESTAMP))
+      kafka_messages_consumed_total{topic="payment-events",consumer_group="accounting",partition="$$(( RANDOM % 8 ))",tenant="$$TENANT",datacenter="$$DC",cluster="$$CLUSTER"} $$((RANDOM % 49000 + TIMESTAMP))
+      # Kafka lag metrics
+      kafka_consumer_lag{topic="user-events",consumer_group="analytics",partition="$$(( RANDOM % 12 ))",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 1000))
+      kafka_consumer_lag{topic="order-events",consumer_group="analytics",partition="$$(( RANDOM % 16 ))",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 2000))
+      kafka_consumer_lag{topic="payment-events",consumer_group="accounting",partition="$$(( RANDOM % 8 ))",tenant="$$TENANT",datacenter="$$DC"} $$((RANDOM % 500))
       EOF
-        sleep 2
+        sleep 1
       done
-      "
+      '
     restart: unless-stopped
 
   # =============================================================================

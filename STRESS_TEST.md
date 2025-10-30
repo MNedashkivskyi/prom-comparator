@@ -6,38 +6,45 @@ This guide explains how to run comprehensive stress tests to compare Prometheus 
 
 ### Normal Setup vs Stress Test
 
-| Aspect | Normal Setup | Stress Test |
+| Aspect | Normal Setup | Stress Test (High Cardinality) |
 |--------|-------------|-------------|
-| Scrape Interval | 15s | 5s |
+| Scrape Interval | 15s | 3s |
 | Evaluation Interval | 15s | 10s |
-| Metrics Generators | 1 simple | 3 high-cardinality |
-| Recording Rules | 15 basic rules | 50+ complex rules |
-| Time Series | ~1,000 | ~10,000+ |
+| Metrics Generators | 1 simple | 3 high-cardinality (scalable) |
+| Recording Rules | 15 basic rules | 120 complex rules |
+| Time Series | ~1,000 | ~15,000+ (target) |
+| Label Dimensions | Basic | Extended (tenant, datacenter, environment, cluster, team) |
 | Memory Usage | <500MB | 2-4GB |
 | CPU Usage | Low | High |
 
 ### Stress Test Features
 
-1. **High Cardinality Metrics**
-   - Multiple regions, versions, pods, shards
-   - HTTP requests with many label combinations
-   - Database queries across tables and operations
-   - Kafka messages across topics and partitions
-   - gRPC services with multiple methods
+1. **Very High Cardinality Metrics**
+   - **Extended label dimensions**: tenant (3 values), datacenter (4 values), environment (2 values), cluster (5 values), team (4 values)
+   - **HTTP requests** with extensive label combinations across 15+ endpoints
+   - **Database queries** across multiple DBs (postgres, mysql), 8+ tables, 4+ operations
+   - **Kafka messages** across 4+ topics, 8-16 partitions, 3+ consumer groups
+   - **gRPC services**: 5+ services with 12+ methods and status codes
+   - **Connection pools** and cache metrics with shard variations
+   - **Queue metrics** with multiple priorities and worker pods
+   - Each generator creates unique metrics when scaled using hostname
 
-2. **Complex Recording Rules**
-   - Multi-dimensional aggregations
+2. **Complex Recording Rules (120 total)**
+   - Multi-dimensional aggregations across all label combinations
    - Expensive histogram quantiles (p50, p75, p90, p95, p99, p999)
    - Multi-level rules (rules depending on other rules)
    - Heavy computations (weighted averages, standard deviations)
    - Long lookback windows (30m, 1h)
    - Subqueries with moving averages
+   - Cross-service correlation rules
 
-3. **Aggressive Scraping**
-   - 5-second scrape intervals
+3. **Very Aggressive Scraping**
+   - **3-second scrape intervals** (vs 15s normal)
+   - **1-second metric push intervals** from generators
    - 10-second rule evaluation
-   - Multiple concurrent generators
-   - Continuous metric updates
+   - Multiple concurrent generators (scalable from 3 to 20+)
+   - Continuous high-frequency metric updates
+   - Target: ~15,000 active time series
 
 ## System Requirements
 
@@ -181,13 +188,17 @@ Already configured with 3 generators producing diverse metrics.
 
 ### Scenario 2: Extreme Cardinality
 
-Scale up the generators:
+The default stress test now generates ~15,000 time series with high cardinality labels. To increase even further, scale up the generators:
 
 ```bash
+# 9 total generators (~30,000-40,000 time series)
 docker-compose -f docker-compose.stress.yml up -d --scale stress-generator-1=3 --scale stress-generator-2=3 --scale stress-generator-3=3
+
+# 21 total generators (~70,000-90,000 time series)
+docker-compose -f docker-compose.stress.yml up -d --scale stress-generator-1=7 --scale stress-generator-2=7 --scale stress-generator-3=7
 ```
 
-This creates 9 concurrent generators.
+Each generator instance creates unique metrics using its hostname, ensuring true cardinality multiplication.
 
 ### Scenario 3: More Complex Rules
 
@@ -296,8 +307,8 @@ Or reduce load:
 docker-compose -f docker-compose.stress.yml stop stress-generator-3
 
 # Reduce scrape frequency
-# Edit configs/prometheus-stress/prometheus.yml
-# Change scrape_interval from 5s to 10s or 15s
+# Edit configs/prometheus-stress/prometheus.yml and configs/vmagent/vmagent-stress.yml
+# Change scrape_interval from 3s to 5s, 10s, or 15s
 ```
 
 ### Rules Not Evaluating

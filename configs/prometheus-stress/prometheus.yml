@@ -1,5 +1,5 @@
 global:
-  scrape_interval: 5s  # More frequent scraping for stress test
+  scrape_interval: 3s  # Very frequent scraping for high cardinality stress test
   evaluation_interval: 10s  # More frequent rule evaluation
   external_labels:
     cluster: 'prometheus-local-stress'
@@ -22,7 +22,7 @@ remote_write:
 scrape_configs:
   # Scrape Prometheus itself for monitoring
   - job_name: 'prometheus'
-    scrape_interval: 5s
+    scrape_interval: 3s
     static_configs:
       - targets: ['localhost:9090']
         labels:
@@ -30,7 +30,7 @@ scrape_configs:
 
   # Scrape node-exporter
   - job_name: 'node-exporter'
-    scrape_interval: 5s
+    scrape_interval: 3s
     static_configs:
       - targets: ['node-exporter:9100']
         labels:
@@ -38,7 +38,7 @@ scrape_configs:
 
   # Scrape pushgateway (high cardinality metrics)
   - job_name: 'pushgateway'
-    scrape_interval: 5s
+    scrape_interval: 3s
     static_configs:
       - targets: ['pushgateway:9091']
         labels:
