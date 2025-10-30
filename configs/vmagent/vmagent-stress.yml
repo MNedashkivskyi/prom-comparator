@@ -1,26 +1,29 @@
 global:
-  scrape_interval: 15s
+  scrape_interval: 3s  # Very frequent scraping for high cardinality stress test
   external_labels:
-    cluster: 'victoriametrics-remote'
+    cluster: 'victoriametrics-remote-stress'
     replica: '1'
 
 scrape_configs:
   # Scrape vmagent itself for monitoring
   - job_name: 'vmagent'
+    scrape_interval: 3s
     static_configs:
       - targets: ['localhost:8429']
         labels:
           source: 'victoriametrics-stack'
 
-  # Scrape node-exporter (same as Prometheus)
+  # Scrape node-exporter
   - job_name: 'node-exporter'
+    scrape_interval: 3s
     static_configs:
       - targets: ['node-exporter:9100']
         labels:
           source: 'victoriametrics-stack'
 
-  # Scrape pushgateway (receives pushed metrics, same as Prometheus)
+  # Scrape pushgateway (high cardinality metrics, same as Prometheus)
   - job_name: 'pushgateway'
+    scrape_interval: 3s
     static_configs:
       - targets: ['pushgateway:9091']
         labels:
@@ -29,6 +32,7 @@ scrape_configs:
 
   # Scrape VictoriaMetrics metrics
   - job_name: 'victoriametrics'
+    scrape_interval: 10s
     static_configs:
       - targets: ['victoriametrics:8428']
         labels:
@@ -36,6 +40,7 @@ scrape_configs:
 
   # Scrape vmalert metrics
   - job_name: 'vmalert'
+    scrape_interval: 10s
     static_configs:
       - targets: ['vmalert:8880']
         labels:

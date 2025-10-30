@@ -77,7 +77,13 @@ cd prom-comparator
 
 2. Start all services:
 ```bash
-docker-compose up -d
+# Simple setup (no Docker login required) - RECOMMENDED
+./start.sh
+# or
+make start
+
+# Alternative: Custom metrics generator (requires Docker Hub login)
+make start-custom
 ```
 
 3. Wait for all services to start (30-60 seconds):
@@ -93,6 +99,8 @@ open http://localhost:3000
 - Password: `admin`
 
 5. Open the "Prometheus vs VictoriaMetrics - Recording Rules Performance" dashboard
+
+**Note:** The default setup uses a simplified metrics generator that doesn't require building custom Docker images. See [QUICKSTART.md](QUICKSTART.md) if you encounter Docker authentication issues.
 
 ### Viewing Individual Components
 
@@ -209,6 +217,33 @@ docker-compose restart vmalert
 2. **CPU Usage**: Sum of Prometheus CPU vs sum of (vmalert + VictoriaMetrics) CPU
 3. **Memory Usage**: Prometheus memory vs (vmalert + VictoriaMetrics) memory
 4. **Query Percentiles**: Response time distribution
+
+## Stress Testing
+
+For comprehensive performance testing under heavy load, see [STRESS_TEST.md](STRESS_TEST.md).
+
+### Quick Stress Test
+
+```bash
+# Start stress test environment
+make start-stress
+
+# Run automated benchmark
+make benchmark
+
+# Stop stress test
+make stop-stress
+```
+
+The stress test includes:
+- **Very high cardinality metrics** (~15,000 time series target)
+- **Extended label dimensions**: tenant, datacenter, environment, cluster, team
+- **120 complex recording rules** including multi-level aggregations and histogram quantiles
+- **3-second scrape intervals** (very aggressive)
+- **1-second metric push intervals** from generators
+- 10-second rule evaluation intervals
+- **Scalable generators**: Use hostname for unique metrics when scaled
+- Multiple metric types: HTTP, database, Kafka, gRPC, cache, queue, connection pool metrics
 
 ## Troubleshooting
 
